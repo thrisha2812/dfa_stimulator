@@ -33,7 +33,7 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             font-size: 14px;
             pointer-events: none;
-            fill: #111;
+            fill: #333; /* Changed from #111 to a slightly lighter dark gray */
         }
         .edgelabel {
             font-size: 12px;
@@ -554,10 +554,14 @@ q3, 1, q1`;
                 try {
                     // 1. Validate symbols and compute path
                     for (const symbol of symbols) {
+                        if (symbol === '') continue; // Ignore empty strings if input is empty
                         if (!dfa.alphabet.has(symbol)) {
                             throw new Error(`Input symbol '${symbol}' is not in the alphabet.`);
                         }
                         const nextState = dfa.transitions[currentState][symbol];
+                        if (!nextState) { // Should be covered by completeness check, but good failsafe
+                             throw new Error(`Missing transition for state '${currentState}' on symbol '${symbol}'.`);
+                        }
                         transitions.push({ from: currentState, symbol: symbol, to: nextState });
                         currentState = nextState;
                         path.push(currentState);
@@ -576,6 +580,15 @@ q3, 1, q1`;
             
             function animateSimulation(path, transitions, isAccepted) {
                 let step = 0;
+                
+                // Handle empty string input
+                if (path.length === 1 && transitions.length === 0) {
+                    highlightNode(path[0], true);
+                    const resultMessage = isAccepted ? "Accepted" : "Rejected";
+                    showResult(resultMessage, isAccepted);
+                    pathBox.textContent = "Path: " + path[0];
+                    return;
+                }
                 
                 function animateStep() {
                     if (step === 0) {
