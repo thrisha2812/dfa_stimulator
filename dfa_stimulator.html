@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DFA Simulator</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- D3.js for graph visualization -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        /* Custom styles for the D3 graph */
+        .link {
+            stroke: #999;
+            stroke-opacity: 0.8;
+            stroke-width: 2px;
+            fill: none;
+        }
+        .link.active {
+            stroke: #f59e0b; /* amber-500 */
+            stroke-width: 4px;
+        }
+        .node circle {
+            stroke: #333;
+            stroke-width: 2px;
+        }
+        .node circle.active {
+            stroke: #f59e0b; /* amber-500 */
+            stroke-width: 4px;
+            fill: #fef3c7; /* amber-100 */
+        }
+        .node text {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-size: 14px;
+            pointer-events: none;
+            fill: #111;
+        }
+        .edgelabel {
+            font-size: 12px;
+            fill: #444;
+            pointer-events: none;
+        }
+        .edgelabel.active {
+            fill: #f59e0b; /* amber-500 */
+            font-weight: bold;
+        }
+        /* Style for the inner circle of a final state */
+        .final-inner {
+            stroke-width: 2px;
+            stroke: #333;
+            fill: none;
+        }
+        /* Style for the start arrow */
+        .start-arrow {
+            stroke: #333;
+            stroke-width: 2px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans leading-normal tracking-normal">
+
+    <div class="container mx-auto p-4 lg:p-8">
+        
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800">DFA Simulator</h1>
+            <p class="text-lg text-gray-600">Define and visualize Deterministic Finite Automata</p>
+        </header>
+
+        <!-- Main layout: Definition Panel | Visualization Panel -->
+        <div class="flex flex-col lg:flex-row gap-8">
+
+            <!-- Left Panel: DFA Definition -->
+            <div class="lg:w-1/3 bg-white p-6 rounded-lg shadow-xl">
+                <h2 class="text-2xl font-semibold mb-4 border-b pb-2">1. Define DFA</h2>
+                
+                <!-- Error/Message Box -->
+                <div id="message-box" class="hidden p-4 rounded-lg mb-4 text-sm"></div>
+
+                <form id="dfa-form" class="space-y-4">
+                    <div>
+                        <label for="dfa-language-desc" class="block text-sm font-medium text-gray-700">Language Description (Optional)</label>
+                        <input type="text" id="dfa-language-desc" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="e.g., L = {w | w ends in '101'}">
+                    </div>
+
+                    <div>
+                        <label for="dfa-states" class="block text-sm font-medium text-gray-700">States</label>
+                        <input type="text" id="dfa-states" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="e.g., q0, q1, q2">
+                        <p class="text-xs text-gray-500 mt-1">Comma-separated state names.</p>
+                    </div>
+
+                    <div>
+                        <label for="dfa-alphabet" class="block text-sm font-medium text-gray-700">Alphabet (Σ)</label>
+                        <input type="text" id="dfa-alphabet" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="e.g., 0, 1">
+                        <p class="text-xs text-gray-500 mt-1">Comma-separated symbols.</p>
+                    </div>
+
+                    <div>
+                        <label for="dfa-start-state" class="block text-sm font-medium text-gray-700">Start State</label>
+                        <input type="text" id="dfa-start-state" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="e.g., q0">
+                    </div>
+
+                    <div>
+                        <label for="dfa-final-states" class="block text-sm font-medium text-gray-700">Final States</label>
+                        <input type="text" id="dfa-final-states" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="e.g., q2">
+                        <p class="text-xs text-gray-500 mt-1">Comma-separated state names.</p>
+                    </div>
+
+                    <div>
+                        <label for="dfa-transitions" class="block text-sm font-medium text-gray-700">Transitions (δ)</label>
+                        <textarea id="dfa-transitions" rows="6" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 font-mono text-sm" placeholder="One per line: from, symbol, to&#10;q0, 0, q1&#10;q0, 1, q0&#10;q1, 0, q1&#10;q1, 1, q2"></textarea>
+                    </div>
+
+                    <button type="button" id="define-dfa-btn" class="w-full bg-blue-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-blue-700 transition duration-300">
+                        Create / Update DFA
+                    </button>
+                    <button type="button" id="load-example-btn" class="w-full bg-gray-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-gray-600 transition duration-300 mt-2">
+                        Load Example (Ends with '101')
+                    </button>
+                </form>
+            </div>
+
+            <!-- Right Panel: Visualization & Simulation -->
+            <div class="lg:w-2/3 flex flex-col gap-8">
+                <!-- Visualization -->
+                <div class="bg-white p-6 rounded-lg shadow-xl flex-grow flex flex-col">
+                    <h2 class="text-2xl font-semibold mb-4 border-b pb-2">2. Visualization (DFA Diagram)</h2>
+                    <div id="language-desc-display" class="text-lg text-gray-700 font-semibold mb-2 text-center hidden"></div>
+                    <div id="dfa-graph-container" class="flex-grow bg-gray-50 border rounded-lg overflow-hidden relative min-h-[400px] lg:min-h-[500px]">
+                        <svg id="dfa-graph" width="100%" height="100%"></svg>
+                        <div id="graph-placeholder" class="absolute inset-0 flex items-center justify-center text-gray-500">
+                            Define a DFA to see the visualization here.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Simulation -->
+                <div class="bg-white p-6 rounded-lg shadow-xl">
+                    <h2 class="text-2xl font-semibold mb-4 border-b pb-2">3. Run Simulation</h2>
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <input type="text" id="input-string" class="flex-grow block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" placeholder="Enter input string...">
+                        <button type="button" id="run-simulation-btn" class="bg-green-600 text-white py-2 px-6 rounded-lg font-semibold hover:bg-green-700 transition duration-300">
+                            Run
+                        </button>
+                    </div>
+                    
+                    <!-- Simulation Result -->
+                    <div id="simulation-result-box" class="hidden mt-4 p-4 rounded-lg text-center font-mono"></div>
+                    <div id="simulation-path" class="mt-2 text-gray-700 text-sm font-mono"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+        <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Elements ---
+            const dfaForm = {
+                languageDesc: document.getElementById('dfa-language-desc'),
+                states: document.getElementById('dfa-states'),
+                alphabet: document.getElementById('dfa-alphabet'),
+                startState: document.getElementById('dfa-start-state'),
+                finalStates: document.getElementById('dfa-final-states'),
+                transitions: document.getElementById('dfa-transitions'),
+            };
+            const defineBtn = document.getElementById('define-dfa-btn');
+            const loadExampleBtn = document.getElementById('load-example-btn');
+            const runBtn = document.getElementById('run-simulation-btn');
+            const inputStringEl = document.getElementById('input-string');
+            const messageBox = document.getElementById('message-box');
+            const resultBox = document.getElementById('simulation-result-box');
+            const pathBox = document.getElementById('simulation-path');
+            const graphPlaceholder = document.getElementById('graph-placeholder');
+            const langDescDisplay = document.getElementById('language-desc-display');
+
+            const svg = d3.select("#dfa-graph");
+            const width = svg.node().getBoundingClientRect().width;
+            const height = svg.node().getBoundingClientRect().height;
+
+            let dfa = {};
+            let nodes = [];
+            let links = [];
+            let simulation;
+
+            // --- D3 Graph Setup ---
+            
+            // Add arrow marker definition
+            svg.append('defs').append('marker')
+                .attr('id', 'arrowhead')
+                .attr('viewBox', '-0 -5 10 10')
+                .attr('refX', 23) // Position arrowhead at the edge of the 20px circle
+                .attr('refY', 0)
+                .attr('orient', 'auto')
+                .attr('markerWidth', 6)
+                .attr('markerHeight', 6)
+                .attr('xoverflow', 'visible')
+                .append('svg:path')
+                .attr('d', 'M 0,-5 L 10,0 L 0,5')
+                .attr('fill', '#999')
+                .style('stroke', 'none');
+
+            // Groups for graph elements
+            let linkGroup = svg.append("g").attr("class", "links");
+            let nodeGroup = svg.append("g").attr("class", "nodes");
+            let edgeLabelGroup = svg.append("g").attr("class", "edgelabels");
+
+            // Create D3 force simulation
+            simulation = d3.forceSimulation()
+                .force("link", d3.forceLink().id(d => d.id).distance(150))
+                .force("charge", d3.forceManyBody().strength(-500))
+                .force("center", d3.forceCenter(width / 2, height / 2))
+                .on("tick", ticked);
+
+            // --- Event Listeners ---
+            defineBtn.addEventListener('click', parseAndDrawDFA);
+            loadExampleBtn.addEventListener('click', loadExample);
+            runBtn.addEventListener('click', runSimulation);
+            
+            // Resize handler
+            window.addEventListener('resize', () => {
+                const newWidth = svg.node().getBoundingClientRect().width;
+                const newHeight = svg.node().getBoundingClientRect().height;
+                simulation.force("center", d3.forceCenter(newWidth / 2, newHeight / 2));
+            });
+
+            // --- Utility Functions ---
+
+            function showMessage(message, isError = false) {
+                messageBox.textContent = message;
+                messageBox.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700');
+                if (isError) {
+                    messageBox.classList.add('bg-red-100', 'text-red-700');
+                } else {
+                    messageBox.classList.add('bg-green-100', 'text-green-700');
+                }
+            }
+
+            function clearMessage() {
+                messageBox.classList.add('hidden');
+                messageBox.textContent = '';
+            }
+
+            function showResult(message, isAccepted) {
+                resultBox.textContent = message;
+                resultBox.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700');
+                if (isAccepted) {
+                    resultBox.classList.add('bg-green-100', 'text-green-700');
+                } else {
+                    resultBox.classList.add('bg-red-100', 'text-red-700');
+                }
+            }
+
+            function clearResult() {
+                resultBox.classList.add('hidden');
+                resultBox.textContent = '';
+                pathBox.textContent = '';
+            }
+
+            function loadExample() {
+                // DFA for language: ends with '101'
+                dfaForm.languageDesc.value = "L = {w | w ends in '101'}";
+                dfaForm.states.value = 'q0, q1, q2, q3';
+                dfaForm.alphabet.value = '0, 1';
+                dfaForm.startState.value = 'q0';
+                dfaForm.finalStates.value = 'q3';
+                dfaForm.transitions.value = 
+`q0, 0, q0
+q0, 1, q1
+q1, 0, q2
+q1, 1, q1
+q2, 0, q0
+q2, 1, q3
+q3, 0, q2
+q3, 1, q1`;
+                parseAndDrawDFA();
+            }
+
+            // --- Core Logic ---
+
+            function parseAndDrawDFA() {
+                clearMessage();
+                clearResult();
+                resetGraphStyles();
+                
+                try {
+                    // 0. Get Language Description
+                    const langDesc = dfaForm.languageDesc.value.trim();
+
+                    // 1. Parse Inputs
+                    const states = new Set(dfaForm.states.value.split(',').map(s => s.trim()).filter(Boolean));
+                    const alphabet = new Set(dfaForm.alphabet.value.split(',').map(s => s.trim()).filter(Boolean));
+                    const startState = dfaForm.startState.value.trim();
+                    const finalStates = new Set(dfaForm.finalStates.value.split(',').map(s => s.trim()).filter(Boolean));
+                    const transitionLines = dfaForm.transitions.value.split('\n').map(s => s.trim()).filter(Boolean);
+
+                    // 2. Validate Inputs
+                    if (states.size === 0) throw new Error("Set of states cannot be empty.");
+                    if (alphabet.size === 0) throw new Error("Alphabet cannot be empty.");
+                    if (!startState) throw new Error("Start state must be defined.");
+                    if (!states.has(startState)) throw new Error(`Start state '${startState}' is not in the set of states.`);
+                    
+                    for (const finalState of finalStates) {
+                        if (!states.has(finalState)) throw new Error(`Final state '${finalState}' is not in the set of states.`);
+                    }
+
+                    // 3. Parse and Validate Transitions
+                    const transitions = {};
+                    for (const state of states) {
+                        transitions[state] = {};
+                    }
+
+                    for (const line of transitionLines) {
+                        const parts = line.split(',').map(s => s.trim());
+                        if (parts.length !== 3) throw new Error(`Invalid transition format: '${line}'`);
+                        
+                        const [fromState, symbol, toState] = parts;
+                        
+                        if (!states.has(fromState)) throw new Error(`Transition error: State '${fromState}' is not defined.`);
+                        if (!alphabet.has(symbol)) throw new Error(`Transition error: Symbol '${symbol}' is not in the alphabet.`);
+                        if (!states.has(toState)) throw new Error(`Transition error: State '${toState}' is not defined.`);
+                        
+                        if (transitions[fromState][symbol]) {
+                            throw new Error(`Non-deterministic error: State '${fromState}' already has a transition for symbol '${symbol}'.`);
+                        }
+                        transitions[fromState][symbol] = toState;
+                    }
+                    
+                    // 4. Check for completeness (Strict DFA)
+                    for (const state of states) {
+                        for (const symbol of alphabet) {
+                            if (!transitions[state][symbol]) {
+                                throw new Error(`Missing transition for state '${state}' on symbol '${symbol}'.`);
+                            }
+                        }
+                    }
+
+                    // 5. Store valid DFA
+                    dfa = { states, alphabet, startState, finalStates, transitions, langDesc };
+                    showMessage("DFA defined successfully!", false);
+                    graphPlaceholder.classList.add('hidden');
+
+                    // 5b. Display Language Description
+                    if (langDesc) {
+                        langDescDisplay.textContent = langDesc;
+                        langDescDisplay.classList.remove('hidden');
+                    } else {
+                        langDescDisplay.classList.add('hidden');
+                    }
+
+                    // 6. Prepare D3 Data
+                    // Use existing nodes if possible to maintain positions
+                    const oldNodes = new Map(nodes.map(d => [d.id, d]));
+                    nodes = Array.from(states).map(id => ({
+                        id,
+                        isStart: id === startState,
+                        isFinal: finalStates.has(id),
+                        ...oldNodes.get(id) // Retain x, y, etc.
+                    }));
+
+                    links = [];
+                    for (const [fromState, symbols] of Object.entries(transitions)) {
+                        for (const [symbol, toState] of Object.entries(symbols)) {
+                            links.push({
+                                source: fromState,
+                                target: toState,
+                                label: symbol
+                            });
+                        }
+                    }
+                    
+                    // Group links by source and target to bundle labels
+                    const linkMap = new Map();
+                    for (const link of links) {
+                        const key = `${link.source}-${link.target}`;
+                        if (!linkMap.has(key)) {
+                            linkMap.set(key, { 
+                                source: link.source, 
+                                target: link.target, 
+                                labels: [],
+                                isSelfLoop: link.source === link.target
+                            });
+                        }
+                        linkMap.get(key).labels.push(link.label);
+                    }
+                    
+                    const graphLinks = Array.from(linkMap.values()).map(l => ({
+                        ...l,
+                        label: l.labels.join(', ')
+                    }));
+
+                    updateGraph(nodes, graphLinks);
+
+                } catch (error) {
+                    showMessage(error.message, true);
+                    graphPlaceholder.classList.remove('hidden');
+                    langDescDisplay.classList.add('hidden');
+                    // Clear graph on error
+                    updateGraph([], []);
+                    dfa = {};
+                }
+            }
+
+            function updateGraph(graphNodes, graphLinks) {
+                // --- Update Nodes ---
+                const node = nodeGroup.selectAll("g.node")
+                    .data(graphNodes, d => d.id)
+                    .join(
+                        enter => {
+                            const g = enter.append("g").attr("class", "node");
+                            
+                            // Main circle
+                            g.append("circle")
+                                .attr("r", 20)
+                                .attr("fill", "#fff");
+
+                            // Inner circle for final states
+                            g.append("circle")
+                                .attr("r", 16)
+                                .attr("class", "final-inner")
+                                .attr("stroke", d => d.isFinal ? '#333' : 'none');
+                            
+                            // Start arrow
+                            g.filter(d => d.isStart)
+                                .append("path")
+                                .attr("d", "M -35 0 L -23 0")
+                                .attr("class", "start-arrow")
+                                .attr("marker-end", "url(#arrowhead)");
+
+                            // State label
+                            g.append("text")
+                                .attr("dy", ".35em")
+                                .attr("text-anchor", "middle")
+                                .text(d => d.id);
+                            
+                            g.call(d3.drag()
+                                .on("start", dragstarted)
+                                .on("drag", dragged)
+                                .on("end", dragended));
+                            
+                            return g;
+                        },
+                        update => {
+                            // Update final state inner circle
+                            update.select(".final-inner")
+                                .attr("stroke", d => d.isFinal ? '#333' : 'none');
+                            // Update start arrow
+                            update.select(".start-arrow").remove(); // Remove old one
+                            update.filter(d => d.isStart) // Add new one
+                                .append("path")
+                                .attr("d", "M -35 0 L -23 0")
+                                .attr("class", "start-arrow")
+                                .attr("marker-end", "url(#arrowhead)");
+                            
+                            return update;
+                        }
+                    );
+
+                // --- Update Links ---
+                const link = linkGroup.selectAll("path.link")
+                    .data(graphLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`)
+                    .join("path")
+                    .attr("class", "link")
+                    .attr("marker-end", "url(#arrowhead)");
+
+                // --- Update Edge Labels ---
+                const edgeLabel = edgeLabelGroup.selectAll("text.edgelabel")
+                    .data(graphLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`)
+                    .join("text")
+                    .attr("class", "edgelabel")
+                    .attr("dy", -5)
+                    .attr("text-anchor", "middle")
+                    .text(d => d.label);
+
+                // --- Restart Simulation ---
+                simulation.nodes(graphNodes);
+                simulation.force("link").links(graphLinks);
+                simulation.alpha(1).restart();
+            }
+
+            function ticked() {
+                // Update node positions
+                nodeGroup.selectAll("g.node")
+                    .attr("transform", d => `translate(${d.x},${d.y})`);
+
+                // Update link paths
+                linkGroup.selectAll("path.link")
+                    .attr("d", d => {
+                        if (d.isSelfLoop) {
+                            // Draw a circular arc for self-loops
+                            const x1 = d.source.x;
+                            const y1 = d.source.y;
+                            const dx = 1; // small offset to create a loop
+                            const dy = -1;
+                            const dr = 30; // radius
+                            return `M ${x1},${y1} A ${dr},${dr} 0 1,1 ${x1 + dx},${y1 + dy}`;
+                        } else {
+                            // Draw a straight line
+                            return `M ${d.source.x},${d.source.y} L ${d.target.x},${d.target.y}`;
+                        }
+                    });
+
+                // Update edge label positions
+                edgeLabelGroup.selectAll("text.edgelabel")
+                    .attr("x", d => {
+                        if (d.isSelfLoop) return d.source.x;
+                        return (d.source.x + d.target.x) / 2;
+                    })
+                    .attr("y", d => {
+                        if (d.isSelfLoop) return d.source.y - 30; // Position above self-loop
+                        return (d.source.y + d.target.y) / 2;
+                    });
+            }
+
+            // --- Drag Functions ---
+            function dragstarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+            function dragended(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+            
+            // --- Simulation Logic ---
+
+            function runSimulation() {
+                clearMessage();
+                clearResult();
+                resetGraphStyles();
+
+                if (Object.keys(dfa).length === 0) {
+                    showMessage("Please define a DFA first.", true);
+                    return;
+                }
+
+                // Restore language description
+                if (dfa.langDesc) {
+                    langDescDisplay.textContent = dfa.langDesc;
+                    langDescDisplay.classList.remove('hidden');
+                } else {
+                    langDescDisplay.classList.add('hidden');
+                }
+
+                const inputString = inputStringEl.value;
+                const symbols = inputString.split('');
+                let currentState = dfa.startState;
+                let path = [currentState];
+                let transitions = [];
+
+                try {
+                    // 1. Validate symbols and compute path
+                    for (const symbol of symbols) {
+                        if (!dfa.alphabet.has(symbol)) {
+                            throw new Error(`Input symbol '${symbol}' is not in the alphabet.`);
+                        }
+                        const nextState = dfa.transitions[currentState][symbol];
+                        transitions.push({ from: currentState, symbol: symbol, to: nextState });
+                        currentState = nextState;
+                        path.push(currentState);
+                    }
+
+                    // 2. Get result
+                    const isAccepted = dfa.finalStates.has(currentState);
+                    
+                    // 3. Animate path
+                    animateSimulation(path, transitions, isAccepted);
+
+                } catch (error) {
+                    showMessage(error.message, true);
+                }
+            }
+            
+            function animateSimulation(path, transitions, isAccepted) {
+                let step = 0;
+                
+                function animateStep() {
+                    if (step === 0) {
+                        // Highlight start state
+                        highlightNode(path[0], true);
+                    }
+                    
+                    if (step < transitions.length) {
+                        const transition = transitions[step];
+                        
+                        // De-highlight previous link/label
+                        if (step > 0) {
+                            highlightLink(transitions[step - 1], false);
+                        }
+                        
+                        // Highlight current node, link, and label
+                        highlightNode(transition.from, true);
+                        highlightLink(transition, true);
+                        
+                        step++;
+                        setTimeout(animateStep, 1000); // 1 second per step
+                    } else {
+                        // Animation finished
+                        // De-highlight last link
+                        if (transitions.length > 0) {
+                             highlightLink(transitions[transitions.length - 1], false);
+                        }
+                        // Highlight final state
+                        highlightNode(path[path.length - 1], true);
+                        
+                        // Show result
+                        const resultMessage = isAccepted ? "Accepted" : "Rejected";
+                        showResult(resultMessage, isAccepted);
+                        pathBox.textContent = "Path: " + path.join(' → ');
+                    }
+                }
+                
+                animateStep();
+            }
+            
+            function resetGraphStyles() {
+                nodeGroup.selectAll("g.node circle").attr("class", "");
+                linkGroup.selectAll("path.link").attr("class", "link");
+                edgeLabelGroup.selectAll("text.edgelabel").attr("class", "edgelabel");
+            }
+            
+            function highlightNode(nodeId, isActive) {
+                nodeGroup.selectAll("g.node")
+                    .filter(d => d.id === nodeId)
+                    .select("circle")
+                    .attr("class", isActive ? "active" : "");
+            }
+            
+            function highlightLink(transition, isActive) {
+                const { from, to, symbol } = transition;
+                
+                // Highlight the path
+                linkGroup.selectAll("path.link")
+                    .filter(d => d.source.id === from && d.target.id === to)
+                    .attr("class", isActive ? "link active" : "link");
+                    
+                // Highlight the label
+                edgeLabelGroup.selectAll("text.edgelabel")
+                    .filter(d => d.source.id === from && d.target.id === to && d.labels.includes(symbol))
+                    .attr("class", isActive ? "edgelabel active" : "edgelabel");
+            }
+
+        });
+    </script>
+</body>
+</html>
+
