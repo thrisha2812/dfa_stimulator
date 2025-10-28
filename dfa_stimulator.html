@@ -23,6 +23,7 @@
         .node circle {
             stroke: #333;
             stroke-width: 2px;
+            fill: #fff; /* Explicitly set node background to white */
         }
         .node circle.active {
             stroke: #f59e0b; /* amber-500 */
@@ -408,8 +409,8 @@ q3, 1, q1`;
                             
                             // Main circle
                             g.append("circle")
-                                .attr("r", 20)
-                                .attr("fill", "#fff");
+                                .attr("r", 20);
+                                // .attr("fill", "#fff"); // Fill is now handled by CSS
 
                             // Inner circle for final states
                             g.append("circle")
